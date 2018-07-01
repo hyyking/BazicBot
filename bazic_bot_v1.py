@@ -12,8 +12,6 @@ from sc2.helpers import ControlGroup
 # Main
 
 class BazicBot(sc2.BotAI):
-	async def on_start(self):
-		await self.chat_send("(glhf)")
 
 	async def on_step(self, iteration):
 		await self.distribute_workers()
@@ -25,10 +23,11 @@ class BazicBot(sc2.BotAI):
 		await self.regroup_marines()
 		await self.build_expansion()
 		await self.build_barracks()
+		await self.build_vespene()
 
 	async def build_workers(self):
 		for cc in self.units(COMMANDCENTER).ready:
-			if self.can_afford(SCV) and cc.noqueue and self.has_ideal_workers(cc):
+			if self.can_afford(SCV) and cc.noqueue and not self.has_ideal_workers(cc):
 				await self.do(cc.train(SCV))
 
 	async def build_supply_depot(self):
@@ -58,7 +57,7 @@ class BazicBot(sc2.BotAI):
 	async def regroup_marines(self):
 		marines = self.units(MARINE).idle
 		for marine in marines:
-			cc = self.units(COMMANDCENTER).closest_to(self.game_info.map_center)
+			cc = self.units(COMMANDCENTER).ready.closest_to(self.game_info.map_center)
 			if marine.position.distance_to(cc) > 10:
 				near = Point2((cc.position.x - 1, cc.position.y))
 				await self.do(marine.move(near))
@@ -87,16 +86,40 @@ class BazicBot(sc2.BotAI):
 		if self.units(COMMANDCENTER).amount == 1:
 			if self.can_afford(COMMANDCENTER):
 				await self.expand_now()
+		else:
+			for cc in self.units(COMMANDCENTER).ready:
+				if not self.has_ideal_workers(cc):
+					return
+			if self.can_afford(COMMANDCENTER):
+				await self.expand_now()
 
 	async def build_barracks(self):
 		if self.units(COMMANDCENTER).amount == 2 and self.units(BARRACKS).amount == 0:
 			if self.can_afford(BARRACKS):
 				await self.build(BARRACKS, near=self.units(COMMANDCENTER).random.position.towards(self.game_info.map_center, 3))
-		elif self.units(COMMANDCENTER).ready.amount >= 2 and self.already_pending(BARRACKS) < 2:
+		elif self.units(COMMANDCENTER).ready.amount >= 2 and self.already_pending(BARRACKS) < 2 and not self.has_ideal_unit_structure(BARRACKS, 3):
 			if self.can_afford(BARRACKS):
 				await self.build(BARRACKS, near=self.units(COMMANDCENTER).random.position.towards(self.game_info.map_center, 3))
 
+	async def build_vespene(self):
+		for cc in self.units(COMMANDCENTER).ready:
+			if self.has_ideal_workers(cc) and not self.already_pending(REFINERY) and self.can_afford(REFINERY):
+				for vg in self.state.vespene_geyser.closer_than(10.0, cc):
+					if self.units(REFINERY).closer_than(1.0, vg).exists:
+						break
+					worker = self.select_build_worker(vg.position)
+					if worker is None:
+						break
+					await self.do(worker.build(REFINERY, vg))
+					break
+
 	# Non-asyncs
+
+	def has_ideal_unit_structure(self, unit, limit):
+		if self.units(unit).amount < limit * self.units(COMMANDCENTER).amount:
+			return False
+		else:
+			return True
 
 	def has_ideal_workers(self, cc):
 		vespenes = self.units(REFINERY).ready.closer_than(10, cc.position)
@@ -108,9 +131,9 @@ class BazicBot(sc2.BotAI):
 		ideal = cc.ideal_harvesters + ideal_vespenes
 		
 		if ideal > cc.assigned_harvesters + assigned_vespenes:
-			return True
-		else:
 			return False
+		else:
+			return True
 
 	# Add has_ideal_supply_depot function
 
@@ -122,7 +145,7 @@ def main():
 		sc2.maps.get("Abyssal Reef LE"),
 		[
 			Bot(Race.Terran, BazicBot()),
-			Computer(Race.Zerg, Difficulty.Medium),
+			Computer(Race.Zerg, Difficulty.Hard),
 		],
 		realtime=True,
 	)
