@@ -24,6 +24,8 @@ class BazicBot(sc2.BotAI):
 		await self.build_expansion()
 		await self.build_barracks()
 		await self.build_vespene()
+		await self.upgrade_orbital_command()
+		await self.build_engineering_bay()
 
 	async def build_workers(self):
 		for cc in self.units(COMMANDCENTER).ready:
@@ -32,7 +34,10 @@ class BazicBot(sc2.BotAI):
 
 	async def build_supply_depot(self):
 		if self.supply_left < 3 + self.units(BARRACKS).amount and self.can_afford(SUPPLYDEPOT) and not self.already_pending(SUPPLYDEPOT):
-			await self.build(SUPPLYDEPOT, near=self.units(COMMANDCENTER).ready.random.position.towards(self.game_info.map_center, 8))
+			try:
+				await self.build(SUPPLYDEPOT, near=self.units(COMMANDCENTER).ready.random.position.towards(self.game_info.map_center, 8))
+			except:
+				await self.build(SUPPLYDEPOT, near=self.units(ORBITALCOMMAND).ready.random.position.towards(self.game_info.map_center, 8))
 
 	async def build_marines(self):
 		for barrack in self.units(BARRACKS).ready:
@@ -57,7 +62,10 @@ class BazicBot(sc2.BotAI):
 	async def regroup_marines(self):
 		marines = self.units(MARINE).idle
 		for marine in marines:
-			cc = self.units(COMMANDCENTER).ready.closest_to(self.game_info.map_center)
+			try:
+				cc = self.units(COMMANDCENTER).ready.closest_to(self.game_info.map_center)
+			except:
+				cc = self.units(ORBITALCOMMAND).closest_to(self.game_info.map_center)
 			if marine.position.distance_to(cc) > 10:
 				near = Point2((cc.position.x - 1, cc.position.y))
 				await self.do(marine.move(near))
@@ -83,13 +91,7 @@ class BazicBot(sc2.BotAI):
 	# Expension actions
 
 	async def build_expansion(self):
-		if self.units(COMMANDCENTER).amount == 1:
-			if self.can_afford(COMMANDCENTER):
-				await self.expand_now()
-		else:
-			for cc in self.units(COMMANDCENTER).ready:
-				if not self.has_ideal_workers(cc):
-					return
+		if self.units(COMMANDCENTER).amount + self.units(ORBITALCOMMAND).amount == 1:
 			if self.can_afford(COMMANDCENTER):
 				await self.expand_now()
 
@@ -112,6 +114,23 @@ class BazicBot(sc2.BotAI):
 						break
 					await self.do(worker.build(REFINERY, vg))
 					break
+
+	async def upgrade_orbital_command(self):
+		for cc in self.units(COMMANDCENTER).ready.noqueue:
+			if self.can_afford(UPGRADETOORBITAL_ORBITALCOMMAND) and self.has_ideal_workers(cc):
+				try:
+					await self.do(cc(UPGRADETOORBITAL_ORBITALCOMMAND))
+				except:
+					pass
+
+	async def build_engineering_bay(self):
+		if self.units(BARRACKS).amount >= 3 and not self.units(ENGINEERINGBAY).exists and self.can_afford(ENGINEERINGBAY):
+			try:
+				await self.build(ENGINEERINGBAY, near=self.units(COMMANDCENTER).first.position.towards(self.game_info.map_center, -4))
+			except:
+				pass
+		elif self.units(ENGINEERINGBAY).exists:
+			# Add upgrades
 
 	# Non-asyncs
 
