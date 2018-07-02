@@ -98,10 +98,10 @@ class BazicBot(sc2.BotAI):
 	async def build_barracks(self):
 		if self.units(COMMANDCENTER).amount == 2 and self.units(BARRACKS).amount == 0:
 			if self.can_afford(BARRACKS):
-				await self.build(BARRACKS, near=self.units(COMMANDCENTER).random.position.towards(self.game_info.map_center, 3))
-		elif self.units(COMMANDCENTER).ready.amount >= 2 and self.already_pending(BARRACKS) < 2 and not self.has_ideal_unit_structure(BARRACKS, 3):
+				await self.build(BARRACKS, near=self.units(COMMANDCENTER).random.position.towards(self.game_info.map_center, 6))
+		elif self.units(COMMANDCENTER).ready.amount >= 2 and self.already_pending(BARRACKS) <= 2 and not self.has_ideal_unit_structure(BARRACKS, 3):
 			if self.can_afford(BARRACKS):
-				await self.build(BARRACKS, near=self.units(COMMANDCENTER).random.position.towards(self.game_info.map_center, 3))
+				await self.build(BARRACKS, near=self.units(COMMANDCENTER).random.position.towards(self.game_info.map_center, 6))
 
 	async def build_vespene(self):
 		for cc in self.units(COMMANDCENTER).ready:
@@ -126,11 +126,16 @@ class BazicBot(sc2.BotAI):
 	async def build_engineering_bay(self):
 		if self.units(BARRACKS).amount >= 3 and not self.units(ENGINEERINGBAY).exists and self.can_afford(ENGINEERINGBAY):
 			try:
-				await self.build(ENGINEERINGBAY, near=self.units(COMMANDCENTER).first.position.towards(self.game_info.map_center, -4))
+				await self.build(ENGINEERINGBAY, near=self.units(COMMANDCENTER).first.position.towards(self.game_info.map_center, -6))
 			except:
 				pass
-		elif self.units(ENGINEERINGBAY).exists:
-			# Add upgrades
+		if self.units(ENGINEERINGBAY).ready.exists:
+			bay = self.units(ENGINEERINGBAY).ready.first
+			abilities = await self.get_available_abilities(bay)
+			if self.can_afford(TERRANINFANTRYWEAPONSLEVEL1) and AbilityId.ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL1 in abilities:
+				await self.do(bay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL1))
+			if self.can_afford(TERRANINFANTRYARMORSLEVEL1) and AbilityId.ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL1 in abilities:
+				await self.do(bay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL1))
 
 	# Non-asyncs
 
@@ -164,9 +169,9 @@ def main():
 		sc2.maps.get("Abyssal Reef LE"),
 		[
 			Bot(Race.Terran, BazicBot()),
-			Computer(Race.Zerg, Difficulty.Hard),
+			Computer(Race.Protoss, Difficulty.Hard),
 		],
-		realtime=True,
+		realtime=False,
 	)
 
 if __name__ == '__main__':
