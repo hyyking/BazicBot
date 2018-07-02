@@ -2,42 +2,148 @@
 
 import random
 import sc2
+from math import fabs
 from sc2 import Race, Difficulty
+from sc2.position import Point2
 from sc2.constants import *
 from sc2.player import Bot, Computer, Human
+from sc2.helpers import ControlGroup
 
 # Main
 
 class BazicBot(sc2.BotAI):
+
 	async def on_step(self, iteration):
 		await self.distribute_workers()
 		await self.build_workers()
+		await self.build_marines()
 		await self.build_supply_depot()
-		await self.first_expansion()
-		await self.first_barracks()
+		await self.add_marines_to_cg(iteration)
+		await self.attack_with_marines()
+		await self.regroup_marines()
+		await self.build_expansion()
+		await self.build_barracks()
+		await self.build_vespene()
+		await self.upgrade_orbital_command()
+		await self.build_engineering_bay()
 
 	async def build_workers(self):
 		for cc in self.units(COMMANDCENTER).ready:
-			if self.can_afford(SCV) and cc.noqueue and self.has_ideal_workers(cc):
+			if self.can_afford(SCV) and cc.noqueue and not self.has_ideal_workers(cc):
 				await self.do(cc.train(SCV))
 
 	async def build_supply_depot(self):
-		if self.supply_left < 3 and self.can_afford(SUPPLYDEPOT) and not self.already_pending(SUPPLYDEPOT):
-			await self.build(SUPPLYDEPOT, near=self.units(COMMANDCENTER).ready.random.position.towards(self.game_info.map_center, 8))
+		if self.supply_left < 3 + self.units(BARRACKS).amount and self.can_afford(SUPPLYDEPOT) and not self.already_pending(SUPPLYDEPOT):
+			try:
+				await self.build(SUPPLYDEPOT, near=self.units(COMMANDCENTER).ready.random.position.towards(self.game_info.map_center, 8))
+			except:
+				await self.build(SUPPLYDEPOT, near=self.units(ORBITALCOMMAND).ready.random.position.towards(self.game_info.map_center, 8))
 
-	# First actions
+	async def build_marines(self):
+		for barrack in self.units(BARRACKS).ready:
+			if self.can_afford(MARINE) and barrack.noqueue:
+				await self.do(barrack.train(MARINE))
 
-	async def first_expansion(self):
-		if self.units(COMMANDCENTER).amount == 1:
+	async def add_marines_to_cg(self, iteration):
+		if self.units(MARINE).idle.amount > 15 + (2 * self.units(BARRACKS).ready.amount) and iteration % 42 == 0:
+			idle_marines = ControlGroup(self.units(MARINE).idle)
+			self.attack_groups.add(idle_marines)
+
+	async def attack_with_marines(self):
+		for ag in list(self.attack_groups):
+			alive_units = ag.select_units(self.units)
+			if alive_units.exists and alive_units.idle.exists:
+				target = self.known_enemy_structures.random_or(self.enemy_start_locations[0]).position
+				for marine in ag.select_units(self.units):
+					 await self.do(marine.attack(target))
+			else:
+				self.attack_groups.remove(ag)
+
+	async def regroup_marines(self):
+		marines = self.units(MARINE).idle
+		for marine in marines:
+			try:
+				cc = self.units(COMMANDCENTER).ready.closest_to(self.game_info.map_center)
+			except:
+				cc = self.units(ORBITALCOMMAND).closest_to(self.game_info.map_center)
+			if marine.position.distance_to(cc) > 10:
+				near = Point2((cc.position.x - 1, cc.position.y))
+				await self.do(marine.move(near))
+				break
+
+	"""
+	async def attack_seen_enemies(self):
+		try:
+			target = self.known_enemy_units.not_structure.random
+			in_range = False
+			for structure in self.units().structure:
+				if target.position.distance_to(structure) > 10:
+					in_range = True
+			if not in_range:
+				return
+		except:
+			return
+		defence_force = ControlGroup(self.units(MARINE).idle)
+		for marine in defence_force.select_units(self.units):
+			await self.do(marine.attack(target))
+	"""
+
+	# Expension actions
+
+	async def build_expansion(self):
+		if self.units(COMMANDCENTER).amount + self.units(ORBITALCOMMAND).amount == 1:
 			if self.can_afford(COMMANDCENTER):
 				await self.expand_now()
 
-	async def first_barracks(self):
+	async def build_barracks(self):
 		if self.units(COMMANDCENTER).amount == 2 and self.units(BARRACKS).amount == 0:
 			if self.can_afford(BARRACKS):
-				await self.build(BARRACKS, near=self.units(COMMANDCENTER).random.position.towards(self.game_info.map_center, 3))
+				await self.build(BARRACKS, near=self.units(COMMANDCENTER).random.position.towards(self.game_info.map_center, 6))
+		elif self.units(COMMANDCENTER).ready.amount >= 2 and self.already_pending(BARRACKS) <= 2 and not self.has_ideal_unit_structure(BARRACKS, 3):
+			if self.can_afford(BARRACKS):
+				await self.build(BARRACKS, near=self.units(COMMANDCENTER).random.position.towards(self.game_info.map_center, 6))
+
+	async def build_vespene(self):
+		for cc in self.units(COMMANDCENTER).ready:
+			if self.has_ideal_workers(cc) and not self.already_pending(REFINERY) and self.can_afford(REFINERY):
+				for vg in self.state.vespene_geyser.closer_than(10.0, cc):
+					if self.units(REFINERY).closer_than(1.0, vg).exists:
+						break
+					worker = self.select_build_worker(vg.position)
+					if worker is None:
+						break
+					await self.do(worker.build(REFINERY, vg))
+					break
+
+	async def upgrade_orbital_command(self):
+		for cc in self.units(COMMANDCENTER).ready.noqueue:
+			if self.can_afford(UPGRADETOORBITAL_ORBITALCOMMAND) and self.has_ideal_workers(cc):
+				try:
+					await self.do(cc(UPGRADETOORBITAL_ORBITALCOMMAND))
+				except:
+					pass
+
+	async def build_engineering_bay(self):
+		if self.units(BARRACKS).amount >= 3 and not self.units(ENGINEERINGBAY).exists and self.can_afford(ENGINEERINGBAY):
+			try:
+				await self.build(ENGINEERINGBAY, near=self.units(COMMANDCENTER).first.position.towards(self.game_info.map_center, -6))
+			except:
+				pass
+		if self.units(ENGINEERINGBAY).ready.exists:
+			bay = self.units(ENGINEERINGBAY).ready.first
+			abilities = await self.get_available_abilities(bay)
+			if self.can_afford(TERRANINFANTRYWEAPONSLEVEL1) and AbilityId.ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL1 in abilities:
+				await self.do(bay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL1))
+			if self.can_afford(TERRANINFANTRYARMORSLEVEL1) and AbilityId.ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL1 in abilities:
+				await self.do(bay(ENGINEERINGBAYRESEARCH_TERRANINFANTRYARMORLEVEL1))
 
 	# Non-asyncs
+
+	def has_ideal_unit_structure(self, unit, limit):
+		if self.units(unit).amount < limit * self.units(COMMANDCENTER).amount:
+			return False
+		else:
+			return True
 
 	def has_ideal_workers(self, cc):
 		vespenes = self.units(REFINERY).ready.closer_than(10, cc.position)
@@ -49,18 +155,23 @@ class BazicBot(sc2.BotAI):
 		ideal = cc.ideal_harvesters + ideal_vespenes
 		
 		if ideal > cc.assigned_harvesters + assigned_vespenes:
-			return True
-		else:
 			return False
+		else:
+			return True
+
+	# Add has_ideal_supply_depot function
+
+	def __init__(self):
+		self.attack_groups = set()
 
 def main():
 	sc2.run_game(
 		sc2.maps.get("Abyssal Reef LE"),
 		[
 			Bot(Race.Terran, BazicBot()),
-			Computer(Race.Zerg, Difficulty.Easy),
+			Computer(Race.Protoss, Difficulty.Hard),
 		],
-		realtime=True,
+		realtime=False,
 	)
 
 if __name__ == '__main__':
