@@ -4,32 +4,23 @@ from sc2.position import Point2
 from sc2.constants import *
 from sc2.player import Bot, Computer, Human
 from sc2.helpers import ControlGroup
-import math
+
 
 
 class Territory(sc2.BotAI):
 
 	def __init__(self):
 		self.territory_cc_list = list()
+		self.proxy_cc_list = list()
 
 
 	async def on_step(self, iteration):
 		await self.update_territory(iteration)
 		await self.defend_territory()
-		await self.build_expansion()
+		await self.proxy_expand()
+
 		print(self.territory_cc_list)
-
-
-
-
-
-
-	async def build_expansion(self):
-			if self.can_afford(COMMANDCENTER):
-				try:
-					await self.expand_from(self.territory_cc_list[1])
-				except:
-					await self.expand_from(self.territory_cc_list[-1])
+		print(self.proxy_cc_list)
 
 
 	async def update_territory(self, iteration):
@@ -38,12 +29,21 @@ class Territory(sc2.BotAI):
 			self.territory_cc_list.append(self.units(COMMANDCENTER)[0])
 		
 		#cc update
-		territory_tag_list = [x.tag for x in self.territory_cc_list]
+		territory_tag_list = {x.tag for x in self.territory_cc_list}
+		proxy_tag_list = {x.tag for x in self.proxy_cc_list}
 		for cc in self.units(COMMANDCENTER):
 			if self.in_territory_range(cc.position) and cc.tag not in territory_tag_list:
 				return self.territory_cc_list.append(cc)
+			elif (cc.tag not in territory_tag_list) and (cc.tag not in proxy_tag_list):
+				return self.proxy_cc_list.append(cc)
 
+
+		#In case of cc destruction
 		cc_tag_list = [x.tag for x in self.units(COMMANDCENTER)]
+		for cc in self.proxy_cc_list:
+			if cc.tag not in cc_tag_list:
+				return self.proxy_cc_list.remove(cc)
+
 		for cc in self.territory_cc_list:
 			if cc.tag not in cc_tag_list:
 				return self.territory_cc_list.remove(cc)
@@ -59,25 +59,16 @@ class Territory(sc2.BotAI):
 				if self.in_territory_range(unit.position):
 					await self.do(unit.attack(target))
 
-	
-	def in_territory_range(self, object_position, lf_range=40):
-		ox, oy = object_position
-		for cc in self.territory_cc_list:
-			ccx, ccy = cc.position
-			if 0 < (ox-ccx)**2 + (oy-ccy)**2 < lf_range**2:
-				return True
-			else:
-				continue
-		return False
 
-	def object_in_range(self, in_range, from_building, lf_range):
-		fx, fy = from_building
-		sx, sy = in_range
-		if 0 < (sx-fx)**2 + (sy-fy)**2 < lf_range**2:
-			return True
-		else:
-			return False
+	#BUILD CHEESE BASE
+	async def proxy_expand(self):
+		if self.can_afford(COMMANDCENTER) and len(self.proxy_cc_list) == 0 and len(self.territory_cc_list) == 1:
+			for exp in self.expansion_locations:
+				if self.object_in_range(exp, self.enemy_start_locations[0].position, 100, 40):
+					await self.build(COMMANDCENTER, near=exp)
 
+
+	#EXPAND FROM
 	async def expand_from(self, start_building, building=None, max_distance=10, location=None):
 		if not building:
 			building = self.townhalls.first.type_id
@@ -92,7 +83,7 @@ class Territory(sc2.BotAI):
 	async def get_from_expansion(self, start_building):
 		"""Find next expansion location."""
 		closest = None
-		distance = math.inf
+		distance = 50
 		for el in self.expansion_locations:
 			def is_near_to_expansion(t):
 				return t.position.distance_to(el) < self.EXPANSION_GAP_THRESHOLD
@@ -110,6 +101,26 @@ class Territory(sc2.BotAI):
 				distance = d
 				closest = el
 		return closest
+
+
+	#NON ASYNC
+	def in_territory_range(self, object_position, lf_range=40):
+		ox, oy = object_position
+		for cc in self.territory_cc_list:
+			ccx, ccy = cc.position
+			if 0 < (ox-ccx)**2 + (oy-ccy)**2 < lf_range**2:
+				return True
+			else:
+				continue
+		return False
+
+	def object_in_range(self, in_range, from_building, max_range, min_range=0):
+		fx, fy = from_building
+		sx, sy = in_range
+		if min_range**2 < (sx-fx)**2 + (sy-fy)**2 < max_range**2:
+			return True
+		else:
+			return False
 
 def main():
 	sc2.run_game(
