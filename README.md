@@ -8,23 +8,23 @@ Current features:
   - Attack possible enemy start location with marine waves
 
 
-###hyyking
+**hyyking**
 Finished v1 of:
-  - Owned territory
-  - Territory defense
-  - Smart expansions (from a certain building)
-  - Cheese expansions
+  - [X] Owned territory
+  - [X] Territory defense
+  - [X] Smart expansions (range around a certain building)
+  - [X] Cheese expansions
   
 Working on:
-- Scouting
-- Enemy territory consideration
-- Enemy force consideration
+- [] Scouting
+- [] Enemy territory consideration
+- [] Enemy force consideration
   
 
 see the file territory_control.py for more
 
 
-###SpectreVert:
+**SpectreVert:**
 Upcoming features (for version 1):
   - Researching upgrades
   - Building units from Factory and Starport based on enemy composition
