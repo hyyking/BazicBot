@@ -16,9 +16,9 @@ Finished v1 of:
   - [X] Cheese expansions
   
 Working on:
-- [] Scouting
-- [] Enemy territory consideration
-- [] Enemy force consideration
+- [ ] Scouting
+- [ ] Enemy territory consideration
+- [ ] Enemy force consideration
   
 
 see the file territory_control.py for more
