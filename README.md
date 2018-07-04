@@ -8,17 +8,23 @@ Current features:
   - Attack possible enemy start location with marine waves
 
 
-####hyyking
-Currently working on macro based features such as:
+###hyyking
+Finished v1 of:
   - Owned territory
   - Territory defense
-  - Smart expansions
+  - Smart expansions (from a certain building)
   - Cheese expansions
+  
+Working on:
+- Scouting
+- Enemy territory consideration
+- Enemy force consideration
+  
 
 see the file territory_control.py for more
 
 
-####SpectreVert:
+###SpectreVert:
 Upcoming features (for version 1):
   - Researching upgrades
   - Building units from Factory and Starport based on enemy composition
